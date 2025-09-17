@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # ActiveMQ for JMS messaging
+  activemq:
+    image: rmohr/activemq:5.15.9
+    container_name: schedule-activemq
+    ports:
+      - "61616:61616"   # JMS port
+      - "8161:8161"     # Admin console
+    environment:
+      - ACTIVEMQ_ADMIN_LOGIN=admin
+      - ACTIVEMQ_ADMIN_PASSCODE=admin
+    volumes:
+      - activemq_data:/opt/activemq/data
+    networks:
+      - schedule-network
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./AuthService
+      dockerfile: Dockerfile
+    container_name: schedule-auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8081
+    depends_on:
+      - activemq
+    networks:
+      - schedule-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./NotificationService
+      dockerfile: Dockerfile
+    container_name: schedule-notification-service
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8082
+      - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+    depends_on:
+      - activemq
+    networks:
+      - schedule-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Raspored (Schedule) Service
+  raspored-service:
+    build:
+      context: ./RasporedService
+      dockerfile: Dockerfile
+    container_name: schedule-raspored-service
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8083
+      - SPRING_ACTIVEMQ_BROKER_URL=tcp://activemq:61616
+    depends_on:
+      - activemq
+    networks:
+      - schedule-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./ApiGateway
+      dockerfile: Dockerfile
+    container_name: schedule-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SERVER_PORT=8080
+      - AUTH_SERVICE_URL=http://auth-service:8081
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8082
+      - RASPORED_SERVICE_URL=http://raspored-service:8083
+    depends_on:
+      - auth-service
+      - notification-service
+      - raspored-service
+    networks:
+      - schedule-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  activemq_data:
+
+networks:
+  schedule-network:
+    driver: bridge

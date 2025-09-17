@@ -1,8 +1,6 @@
 package rs.raf.AuthService.services;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.util.JSONPObject;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import org.springframework.http.*;
@@ -45,12 +43,30 @@ public class UserService {
         User user = userRepository.
                 findByUsernameAndPassword(tokenRequestDto.getUsername(), tokenRequestDto.getPassword())
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
+        
         Claims claims = Jwts.claims();
         claims.put("id", user.getUserId());
+        claims.put("username", user.getUsername());
         claims.put("email", user.getEmail());
-        for (Role role : user.getRoles()) {
-            claims.put("role", role.getName());
+        claims.put("firstName", user.getFirstName());
+        claims.put("lastName", user.getLastName());
+        
+        // Handle multiple roles - for now we'll put the first role found
+        // In a more complex system, you might want to handle multiple roles differently
+        String primaryRole = "ROLE_USER"; // Default role
+        if (!user.getRoles().isEmpty()) {
+            primaryRole = user.getRoles().get(0).getName();
         }
+        claims.put("role", primaryRole);
+        
+        // Add all roles as a list for more complex authorization if needed
+        String[] roleNames = user.getRoles().stream()
+                .map(Role::getName)
+                .toArray(String[]::new);
+        claims.put("roles", roleNames);
+        
+        claims.setSubject(user.getUsername());
+        
         return new TokenResponseDto(tokenService.generate(claims));
     }
 
@@ -62,9 +78,7 @@ public class UserService {
 
     public String registerProfessor(ProfessorDto professorDto) throws JsonProcessingException {
         ProfessorCreateDto professorCreateDto = userMapper.professorDtoToProfessorCreateDto(professorDto);
-        ObjectMapper objectMapper = new ObjectMapper();
         ResponseEntity<ProfessorRasporedDto> professorCreateDtoResponseEntity = null;
-        String send = objectMapper.writeValueAsString(professorCreateDto);
         HttpEntity<ProfessorCreateDto> request = new HttpEntity<>(professorCreateDto);
         try {
             professorCreateDtoResponseEntity = rasporedServiceRestTemplate.postForEntity("http://localhost:8080/api/raspored/new/nastavnik",

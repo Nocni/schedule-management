@@ -28,11 +28,6 @@ public class UserController {
         return new ResponseEntity<>(userService.findAll(), HttpStatus.OK);
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<TokenResponseDto> loginUser(@RequestBody @Valid TokenRequestDto tokenRequestDto) {
-        return new ResponseEntity<>(userService.login(tokenRequestDto), HttpStatus.OK);
-    }
-
     @PostMapping(value = "/register", consumes = "application/json", produces = "application/json")
     public ResponseEntity<UserDto> registerUser(@RequestBody @Valid UserCreateDto userCreateDto) {
         return new ResponseEntity<>(userService.register(userCreateDto), HttpStatus.CREATED);
@@ -72,14 +67,6 @@ public class UserController {
                                            @PathVariable("id") int id) {
         userService.delete(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @PutMapping("/assignRole/{id}")
-    @CheckSecurity(roles = {"ROLE_ADMIN"})
-    public ResponseEntity<UserDto> assignRole(@RequestHeader("Authorization") String Authorization,
-                                              @PathVariable("id") int userId,
-                                              @RequestParam String roleName) {
-        return new ResponseEntity<>(userService.assignRole(userId, roleName), HttpStatus.OK);
     }
 
 }

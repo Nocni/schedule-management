@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # ActiveMQ for JMS messaging - development setup
+  activemq-dev:
+    image: rmohr/activemq:5.15.9
+    container_name: schedule-activemq-dev
+    ports:
+      - "61616:61616"   # JMS port
+      - "8161:8161"     # Admin console
+    environment:
+      - ACTIVEMQ_ADMIN_LOGIN=admin
+      - ACTIVEMQ_ADMIN_PASSCODE=admin
+    volumes:
+      - activemq_dev_data:/opt/activemq/data
+    networks:
+      - schedule-dev-network
+
+volumes:
+  activemq_dev_data:
+
+networks:
+  schedule-dev-network:
+    driver: bridge

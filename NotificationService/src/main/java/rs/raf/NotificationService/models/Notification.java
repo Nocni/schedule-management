@@ -2,11 +2,10 @@ package rs.raf.NotificationService.models;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.annotation.CreatedDate;
 
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import java.time.Instant;
+import javax.persistence.*;
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -14,15 +13,24 @@ import java.time.Instant;
 public class Notification {
 
     @Id
-    private long notificationId;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long notificationId;
 
     private String message;
 
     private String email;
+    
+    private Long userId;
 
-    private String type;
+    private String type; // "DODAVANJE", "IZMENA", "BRISANJE"
 
-    @LastModifiedDate
-    private Instant time;
+    @CreatedDate
+    @Column(updatable = false)
+    private LocalDateTime time;
+    
+    @PrePersist
+    protected void onCreate() {
+        time = LocalDateTime.now();
+    }
 
 }

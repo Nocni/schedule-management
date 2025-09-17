@@ -1,11 +1,12 @@
 package rs.raf.RasporedService.services;
 
 import jakarta.persistence.EntityNotFoundException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import rs.raf.RasporedService.dtos.TerminDto;
+import rs.raf.RasporedService.messaging.NotificationMessageSender;
 import rs.raf.RasporedService.models.*;
 import rs.raf.RasporedService.repositories.TerminRepository;
+import rs.raf.RasporedService.security.JwtUtil;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,18 +19,23 @@ public class TerminService {
     private final PredmetService predmetService;
     private final UcionicaService ucionicaService;
     private final GrupaService grupaService;
+    private final NotificationMessageSender notificationSender;
+    private final JwtUtil jwtUtil;
 
-    @Autowired
     public TerminService(TerminRepository terminRepository, NastavnikService nastavnikService,
-                         PredmetService predmetService, UcionicaService ucionicaService, GrupaService grupaService) {
+                         PredmetService predmetService, UcionicaService ucionicaService, 
+                         GrupaService grupaService, NotificationMessageSender notificationSender,
+                         JwtUtil jwtUtil) {
         this.terminRepository = terminRepository;
         this.nastavnikService = nastavnikService;
         this.predmetService = predmetService;
         this.ucionicaService = ucionicaService;
         this.grupaService = grupaService;
+        this.notificationSender = notificationSender;
+        this.jwtUtil = jwtUtil;
     }
 
-    public <S extends Termin> void save(S termin) {
+    public void save(Termin termin) {
         if (predmetService.getPredmetByNaziv(termin.getPredmet().getNaziv()).isEmpty())
             predmetService.save(termin.getPredmet());
         if (ucionicaService.getUcionicaByOznaka(termin.getUcionica().getOznaka()).isEmpty())
@@ -39,7 +45,7 @@ public class TerminService {
         terminRepository.save(termin);
     }
 
-    public <S extends Termin> S save(TerminDto termin) {
+    public Termin save(TerminDto termin) {
 
         try {
             Optional<Nastavnik> nastavnikOptional = nastavnikService.getNastavnikById(termin.getNastavnik());
@@ -65,7 +71,22 @@ public class TerminService {
 
                 nastavnikService.save(nastavnik);
 //                predmetService.save(predmet);
-                return (S) terminRepository.save(noviTermin);
+                Termin savedTermin = terminRepository.save(noviTermin);
+                
+                // Send notification for schedule change
+                try {
+                    // For now, using default values since we don't have user context in this method
+                    // In a real implementation, this would be passed from the controller
+                    notificationSender.sendScheduleChangeNotification(1L, "admin@raf.rs", 
+                        String.format("Dodat je novi termin: %s - %s u %s", 
+                            predmet.getNaziv(), nastavnik.getIme() + " " + nastavnik.getPrezime(), 
+                            ucionica.getOznaka()), "DODAVANJE");
+                } catch (Exception e) {
+                    // Log error but don't fail the operation
+                    System.err.println("Failed to send notification: " + e.getMessage());
+                }
+                
+                return savedTermin;
             } else {
                 throw new EntityNotFoundException("Nastavnik, predmet, ucionica ili grupe nisu pronađeni.");
             }
@@ -78,6 +99,16 @@ public class TerminService {
         Termin termin = terminRepository.findByPocetakAndUcionicaOznakaAndDan(pocetak, ucionicaOznaka, dan);
         if (termin != null) {
             terminRepository.delete(termin);
+            
+            // Send notification for schedule deletion
+            try {
+                notificationSender.sendScheduleChangeNotification(1L, "admin@raf.rs", 
+                    String.format("Obrisan je termin: %s u %s", 
+                        termin.getPredmet().getNaziv(), termin.getUcionica().getOznaka()), "BRISANJE");
+            } catch (Exception e) {
+                // Log error but don't fail the operation
+                System.err.println("Failed to send notification: " + e.getMessage());
+            }
         } else {
             throw new EntityNotFoundException("Termin nije pronađen.");
         }
